@@ -1,0 +1,85 @@
+version: '3.8'
+networks:
+  public:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${NETWORK_SUBNET}
+services:
+  database:
+    container_name: ${CONTAINER_PREFIX}_database
+    build:
+      context: ./Docker/Database
+      args:
+        - MYSQL_CONTAINER_USER=${MYSQL_CONTAINER_USER}
+        - MYSQL_CONTAINER_GROUP=${MYSQL_CONTAINER_GROUP}
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    networks:
+      public:
+        ipv4_address: ${MYSQL_IP}
+    volumes:
+      - ./logs/mysql:${MYSQL_LOG_DIR}
+      - ./database:${MYSQL_DATA_DIR}
+    ports:
+      - '3360:3306'
+
+  server:
+    container_name: ${CONTAINER_PREFIX}_server
+    build:
+      context: ./Docker/Server
+      args:
+        - WEB_USER=${WEB_USER}
+        - WEB_GROUP=${WEB_GROUP}
+        - APACHE_ROOT_DIR=${APACHE_ROOT_DIR}
+    environment:
+      - APACHE_EXPOSED_PORT=${APACHE_EXPOSED_PORT_HTTP}
+      - PHP_PORT=${PHP_PORT}
+      - APACHE_ROOT_DIR=${APACHE_ROOT_DIR}
+      - PHP_IP=${PHP_IP}
+      - PHP_APP_DIR=${PHP_APP_DIR}
+      - WEB_USER=${WEB_USER}
+      - WEB_GROUP=${WEB_GROUP}
+    networks:
+      public:
+        ipv4_address: ${APACHE_IP}
+    volumes:
+      - ./logs/apache:${APACHE_ROOT_DIR}/logs
+      - ./Docker/Server/Certs:/etc/certs
+    ports:
+      - ${APACHE_EXPOSED_PORT_HTTPS}:443
+      - ${APACHE_EXPOSED_PORT_HTTP}:80
+
+  php:
+    container_name: ${CONTAINER_PREFIX}_php
+    build:
+      context: ./Docker/Php
+      args:
+        - WEB_USER=${WEB_USER}
+        - WEB_GROUP=${WEB_GROUP}
+        - PHP_ROOT_DIR=${PHP_ROOT_DIR}
+    working_dir: ${PHP_APP_DIR}
+    volumes:
+      - ./Application/gp_de:${PHP_APP_DIR}/gp_de
+      - ./Application/gp_team:${PHP_APP_DIR}/gp_team
+      - ./Application/gp_site:${PHP_APP_DIR}/gp_site
+      - ./logs/php:${PHP_ROOT_DIR}/logs
+    depends_on:
+      - server
+      - database
+    networks:
+      public:
+        ipv4_address: ${PHP_IP}
+    environment:
+      - PHP_ROOT_DIR=${PHP_ROOT_DIR}
+      - APACHE_IP=${APACHE_IP}
+      - PHP_PORT=${PHP_PORT}
+      - WEB_USER=${WEB_USER}
+      - WEB_GROUP=${WEB_GROUP}
+      - MYSQL_IP=${MYSQL_IP}
+      - MYSQL_ROOT_USER=${MYSQL_ROOT_USER}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
